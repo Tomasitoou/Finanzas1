@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Calculadora semanal - Finanzas</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --accent:#06b6d4; --muted:#94a3b8; --glass: rgba(255,255,255,0.04);
+      --success:#10b981; --danger:#ef4444;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; background:linear-gradient(180deg,#041022 0%, #071028 100%); color:#e6eef6; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px}
+    .wrap{width:100%; max-width:960px}
+    header{display:flex; gap:16px; align-items:center; margin-bottom:18px; flex-wrap:wrap}
+    header h1{font-size:20px; margin:0}
+    .card{background:var(--card); border-radius:12px; padding:18px; box-shadow: 0 6px 20px rgba(2,6,23,0.6)}
+
+    .form-row{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:center}
+    label{font-size:13px; color:var(--muted); display:block; margin-bottom:8px}
+    input[type=number], input[type=text], select{width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:var(--glass); color:inherit}
+    .actions{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap}
+    button{flex:1 1 auto; padding:10px 14px; border-radius:10px; background:var(--accent); color:#042029; font-weight:600; border:none; cursor:pointer; min-width:120px}
+    button.secondary{background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.04)}
+
+    .grid{display:grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-top:16px}
+    .wallet{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:14px; border-radius:10px}
+    .wallet h3{margin:0 0 6px 0; font-size:14px}
+    .amount{font-size:18px; font-weight:700; word-wrap:break-word}
+    .small{font-size:12px; color:var(--muted)}
+
+    .bar{height:10px; background:rgba(255,255,255,0.04); border-radius:8px; overflow:hidden; margin-top:8px}
+    .bar > i{display:block; height:100%; width:0%}
+
+    .totals{display:flex; gap:10px; margin-top:12px; align-items:center; flex-wrap:wrap}
+    .totals .pill{background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:999px; font-weight:600; flex:1 1 auto; text-align:center}
+
+    footer{margin-top:14px; font-size:13px; color:var(--muted)}
+
+    /* instrucciones y recomendaciones */
+    section h2{margin-top:0; font-size:18px}
+    section ol, section ul{font-size:14px; color:var(--muted); margin:0; padding-left:20px}
+    section{margin-bottom:20px}
+
+    /* gráfico pequeño */
+    #finanzasChart{
+      max-width:250px !important;
+      margin:20px auto;
+      display:block;
+    }
+
+    @media (max-width:700px){
+      body{padding:12px}
+      .form-row{grid-template-columns:1fr}
+      header h1{font-size:16px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="card" style="padding:12px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2v20M2 12h20" stroke="#06b6d4" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <h1>Calculadora semanal de finanzas</h1>
+          <div style="font-size:13px;color:var(--muted)">Introduce tu ingreso de la semana y obtén la distribución a cada wallet</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- INSTRUCCIONES -->
+    <section class="card">
+      <h2>Cómo usar la calculadora</h2>
+      <ol>
+        <li>Ingresa cuánto dinero ganaste esta semana.</li>
+        <li>Define tu base semanal (por defecto 180.000 COP).</li>
+        <li>Elige el modo de cálculo: 50/30/20 o Base + Extra.</li>
+        <li>Presiona “Calcular” para ver cuánto destinar a cada categoría.</li>
+        <li>Observa el gráfico circular para visualizar tus finanzas.</li>
+      </ol>
+    </section>
+
+    <div class="card">
+      <div class="form-row">
+        <div>
+          <label for="amount">Dinero que entró esta semana (COP)</label>
+          <input id="amount" type="number" min="0" step="1000" value="180000" />
+        </div>
+        <div>
+          <label for="base">Base semanal (ej: 180000)</label>
+          <input id="base" type="number" min="0" step="1000" value="180000" />
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top:12px; align-items:center; flex-wrap:wrap">
+        <div style="flex:1 1 200px">
+          <label for="mode">Modo de reparto</label>
+          <select id="mode">
+            <option value="standard">50/30/20 (necesidades/gustos/ahorro)</option>
+            <option value="conExtras">Base + reglas para extra (recomendado)</option>
+          </select>
+        </div>
+
+        <div style="flex:1 1 200px">
+          <label for="currencyDisplay">Formato</label>
+          <input id="currencyDisplay" type="text" value="COP" disabled />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="calc">Calcular</button>
+        <button class="secondary" id="reset">Reset</button>
+        <button class="secondary" id="copy">Copiar</button>
+        <button class="secondary" id="download">Descargar CSV</button>
+      </div>
+
+      <div class="grid" id="results" aria-live="polite" style="margin-top:18px">
+        <div class="wallet">
+          <h3>Necesidades (Needs)</h3>
+          <div class="amount" id="needs">$0</div>
+          <div class="small">Transporte, comida, básicos</div>
+          <div class="bar"><i id="bar-needs" style="background:#0ea5a4"></i></div>
+        </div>
+
+        <div class="wallet">
+          <h3>Gustos (Wants)</h3>
+          <div class="amount" id="wants">$0</div>
+          <div class="small">Salidas, ropa, caprichos</div>
+          <div class="bar"><i id="bar-wants" style="background:#7c3aed"></i></div>
+        </div>
+
+        <div class="wallet">
+          <h3>Ahorro (Savings)</h3>
+          <div class="amount" id="savings">$0</div>
+          <div class="small">Ahorro regular</div>
+          <div class="bar"><i id="bar-savings" style="background:#10b981"></i></div>
+        </div>
+
+        <div class="wallet">
+          <h3>Fondo de emergencia (Emergency)</h3>
+          <div class="amount" id="emergency">$0</div>
+          <div class="small">Reservas (uso en semanas sin eventos)</div>
+          <div class="bar"><i id="bar-emergency" style="background:#ef4444"></i></div>
+        </div>
+      </div>
+
+      <!-- GRÁFICO -->
+      <canvas id="finanzasChart" width="250" height="250"></canvas>
+
+      <div class="totals">
+        <div class="pill">Total ingresado: <strong id="totalText">$0</strong></div>
+        <div class="pill">Base semanal: <strong id="baseText">$0</strong></div>
+        <div class="pill">Extra: <strong id="extraText">$0</strong></div>
+      </div>
+
+      <footer>
+        Sugerencia: usa "Base + reglas para extra" si quieres que la parte que excede la base se distribuya 50% ahorro, 30% gustos, 20% emergencia.
+      </footer>
+    </div>
+
+    <!-- RECOMENDACIONES DETALLADAS -->
+    <section class="card">
+      <h2>Recomendaciones para ahorrar mejor</h2>
+      <ul>
+        <li><strong>Establece metas claras:</strong> define para qué ahorras (fondo de emergencia, estudios, inversión) y cuánto necesitas. Esto te dará motivación y foco para no gastar en cosas que no te acercan a esas metas.</li>
+        <li><strong>Ahorra primero:</strong> separa el 20% (o el porcentaje que elijas) en cuanto recibas el dinero. Si puedes, programa una transferencia automática a otra cuenta o alcancía digital para evitar la tentación.</li>
+        <li><strong>Crea un fondo de emergencia:</strong> apunta a 3 meses de gastos básicos como primer objetivo; luego ve por 6 meses. Esto evita endeudarte cuando tengas semanas sin eventos.</li>
+        <li><strong>Usa “alcancías” separadas:</strong> una para emergencias, otra para metas (curso, herramienta), y otra para ahorro a mediano plazo. Así no mezclas y es más fácil ver avances.</li>
+        <li><strong>Identifica y recorta gastos hormiga:</strong> revisa tus gastos semanales (cafés, recargas extra, apps) y decide cuáles reducir. Lo que ahorres por pequeño que sea, súmalo a ahorro.</li>
+        <li><strong>Revisa cada domingo:</strong> haz el cálculo rápido de la semana y planifica la siguiente: cuánto necesitas ahorrar y si puedes permitir un gasto extra.</li>
+        <li><strong>Cuando tengas excedentes:</strong> primero añade a fondo de emergencia, luego a una meta importante y por último gastos de disfrute. Prioriza seguridad antes de caprichos.</li>
+      </ul>
+    </section>
+
+  </div>
+
+  <script>
+    // helpers
+    function formatCOP(n){
+      const fmt = new Intl.NumberFormat('es-CO');
+      return '$' + fmt.format(Math.round(n));
+    }
+    function setText(id, value){ const el = document.getElementById(id); if(el) el.textContent = value }
+    function setWidth(id, pct){ const el = document.getElementById(id); if(el) el.style.width = Math.min(100, Math.max(0, pct)) + '%' }
+
+    // cálculos
+    function computeStandard(amount){
+      return {needs: amount * 0.50, wants: amount * 0.30, savings: amount * 0.20, emergency: 0};
+    }
+    function computeWithExtras(amount, baseWeekly){
+      const base = Math.min(amount, baseWeekly);
+      const extra = Math.max(0, amount - baseWeekly);
+      const baseSplit = computeStandard(base);
+      const extraSavings = extra * 0.50;
+      const extraWants = extra * 0.30;
+      const extraEmergency = extra * 0.20;
+      return {
+        needs: baseSplit.needs,
+        wants: baseSplit.wants + extraWants,
+        savings: baseSplit.savings + extraSavings,
+        emergency: extraEmergency,
+        base: base,
+        extra: extra
+      };
+    }
+
+    // chart
+    const ctx = document.getElementById('finanzasChart').getContext('2d');
+    const finanzasChart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: ['Necesidades', 'Gustos', 'Ahorro', 'Emergencia'],
+        datasets: [{
+          data: [0,0,0,0],
+          backgroundColor: ['#0ea5a4','#7c3aed','#10b981','#ef4444']
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom', labels:{ color:'#e6eef6' } }
+        }
+      }
+    });
+
+    function actualizarGrafico(needs,wants,savings,emergency){
+      finanzasChart.data.datasets[0].data = [needs,wants,savings,emergency];
+      finanzasChart.update();
+    }
+
+    // render
+    function render(result, amount, baseWeekly){
+      const needs = result.needs || 0;
+      const wants = result.wants || 0;
+      const savings = result.savings || 0;
+      const emergency = result.emergency || 0;
+      const total = needs + wants + savings + emergency;
+
+      setText('needs', formatCOP(needs));
+      setText('wants', formatCOP(wants));
+      setText('savings', formatCOP(savings));
+      setText('emergency', formatCOP(emergency));
+
+      setText('totalText', formatCOP(amount));
+      setText('baseText', formatCOP(Math.min(amount, baseWeekly)));
+      setText('extraText', formatCOP(Math.max(0, amount - baseWeekly)));
+
+      setWidth('bar-needs', total ? (needs/total*100) : 0);
+      setWidth('bar-wants', total ? (wants/total*100) : 0);
+      setWidth('bar-savings', total ? (savings/total*100) : 0);
+      setWidth('bar-emergency', total ? (emergency/total*100) : 0);
+
+      actualizarGrafico(needs, wants, savings, emergency);
+    }
+
+    // acciones
+    function calculate(){
+      const amount = Number(document.getElementById('amount').value) || 0;
+      const baseWeekly = Number(document.getElementById('base').value) || 0;
+      const mode = document.getElementById('mode').value;
+
+      if(mode === 'standard'){
+        render(computeStandard(amount), amount, baseWeekly);
+      } else { // conExtras
+        render(computeWithExtras(amount, baseWeekly), amount, baseWeekly);
+      }
+    }
+
+    function copyResults(){
+      const txt = [
+        'Calculadora semanal - Resultados',
+        'Total: ' + document.getElementById('totalText').textContent,
+        'Base: ' + document.getElementById('baseText').textContent,
+        'Extra: ' + document.getElementById('extraText').textContent,
+        'Necesidades: ' + document.getElementById('needs').textContent,
+        'Gustos: ' + document.getElementById('wants').textContent,
+        'Ahorro: ' + document.getElementById('savings').textContent,
+        'Fondo de emergencia: ' + document.getElementById('emergency').textContent
+      ].join('\n');
+      navigator.clipboard.writeText(txt).then(()=>{ alert('Resultados copiados al portapapeles') }).catch(()=>{ alert('No se pudo copiar.') });
+    }
+
+    function downloadCSV(){
+      const rows = [
+        ['Campo','Valor'],
+        ['Total', document.getElementById('totalText').textContent.replace(/\$/g,'').replace(/\./g,'')],
+        ['Base', document.getElementById('baseText').textContent.replace(/\$/g,'').replace(/\./g,'')],
+        ['Extra', document.getElementById('extraText').textContent.replace(/\$/g,'').replace(/\./g,'')],
+        ['Necesidades', document.getElementById('needs').textContent.replace(/\$/g,'').replace(/\./g,'')],
+        ['Gustos', document.getElementById('wants').textContent.replace(/\$/g,'').replace(/\./g,'')],
+        ['Ahorro', document.getElementById('savings').textContent.replace(/\$/g,'').replace(/\./g,'')],
+        ['Fondo emergencia', document.getElementById('emergency').textContent.replace(/\$/g,'').replace(/\./g,'')]
+      ];
+      const csv = rows.map(r => r.map(c=> '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+      const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'finanzas_semanales.csv';
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    // listeners
+    document.getElementById('calc').addEventListener('click', calculate);
+    document.getElementById('reset').addEventListener('click', ()=>{
+      document.getElementById('amount').value = 180000;
+      document.getElementById('base').value = 180000;
+      document.getElementById('mode').value = 'conExtras';
+      calculate();
+    });
+    document.getElementById('copy').addEventListener('click', copyResults);
+    document.getElementById('download').addEventListener('click', downloadCSV);
+
+    // inicial
+    calculate();
+
+  </script>
+</body>
+</html>
